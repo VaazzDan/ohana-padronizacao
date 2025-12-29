@@ -1,0 +1,18 @@
+[theme]
+# Cor primária (Botões, sliders, focos). Usei um azul tech, mude para a cor da empresa.
+primaryColor = "#00A3E0"
+
+# Cor de fundo principal da aplicação
+backgroundColor = "#0E1117"
+
+# Cor de fundo secundária (Barra lateral, caixas de input)
+secondaryBackgroundColor = "#262730"
+
+# Cor do texto principal
+textColor = "#FAFAFA"
+
+# Fonte (sans serif é padrão para interfaces digitais limpas)
+font = "sans serif"
+
+[server]
+runOnSave = true
