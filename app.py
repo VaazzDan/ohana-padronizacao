@@ -5,48 +5,67 @@ from unidecode import unidecode
 import re
 import io
 
-# --- CONFIGURAÇÃO INICIAL E VISUAL ---
+# --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
     page_title="Ohana Soluções Empresariais", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- ADICIONANDO A LOGO DA EMPRESA ---
-# A logo aparecerá no topo da barra lateral esquerda.
-LOGO_URL = "https://i.ibb.co/67RjdFyj/backgroud-png.png"
-st.logo(LOGO_URL, icon_image=LOGO_URL)
-
-# --- INJEÇÃO DE CSS PERSONALIZADO (OPCIONAL PARA REFINAMENTO) ---
-# Este bloco ajusta pequenos detalhes visuais para ficar mais elegante
+# --- CSS & ESTILO (Identidade Visual) ---
 st.markdown("""
     <style>
-        /* Ajusta o título principal para ficar mais destacado */
-        h1 {
-            color: #00A3E0; /* Usando a mesma cor primária do tema */
-            font-weight: 700;
+        @import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,200..900;1,200..900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0');
+
+        html, body, [class*="css"] {
+            font-family: 'Source Sans 3', sans-serif !important;
         }
-        /* Deixa os botões primários um pouco mais robustos */
-        div.stButton > button:first-child {
-            font-weight: bold;
-            border-radius: 8px;
+
+        h1, h2, h3 {
+            color: #67bed9 !important;
+            font-weight: 700 !important;
         }
-        /* Estiliza as caixas de métricas */
-        [data-testid="stMetricValue"] {
-            font-size: 1.8rem;
-            color: #00A3E0;
+        
+        .material-symbols-outlined {
+            vertical-align: middle;
+            font-size: 1.2em;
+            color: #67bed9;
         }
+
+        div.stButton > button {
+            background-color: #ea5382 !important;
+            color: white !important;
+            border-radius: 8px !important;
+            border: none !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease;
+        }
+        div.stButton > button:hover {
+            background-color: #d64570 !important;
+            transform: scale(1.02);
+        }
+
+        /* Destaque para a coluna de status na tabela */
+        td {
+            vertical-align: middle !important;
+        }
+
+        [data-testid="stSidebar"] { border-right: 1px solid #333; }
+        [data-testid="stMetricValue"] { color: #ea5382 !important; }
+        [data-testid="stMetricLabel"] { color: #67bed9 !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# ==============================================================================
-# DAQUI PARA BAIXO É O MESMO CÓDIGO LÓGICO QUE JÁ DEFINIMOS
-# ==============================================================================
+# --- LOGO ---
+LOGO_URL = "https://i.ibb.co/67RjdFyj/backgroud-png.png"
+st.logo(LOGO_URL, icon_image=LOGO_URL)
 
-# --- 1. FUNÇÕES DE LIMPEZA E REGRAS DE NEGÓCIO ---
+# ==============================================================================
+# LÓGICA DE NEGÓCIO (BACKEND)
+# ==============================================================================
 
 def extrair_id(texto):
-    """Extrai ID numérico do início da string (ex: '123 - Nome')."""
     if pd.isna(texto): return None
     texto = str(texto).strip()
     match = re.match(r'^(\d+)', texto)
@@ -54,7 +73,6 @@ def extrair_id(texto):
     return None
 
 def limpar_ruido_direita(texto):
-    """Remove números, datas e valores soltos no final da string."""
     if pd.isna(texto): return ""
     texto = str(texto)
     texto_limpo = re.sub(r'\s+[\d\.,]+$', '', texto)
@@ -62,7 +80,6 @@ def limpar_ruido_direita(texto):
     return texto_limpo.strip()
 
 def limpar_visual_padrao(texto):
-    """Aplica a padronização visual exigida: Remove acentos e especiais."""
     if pd.isna(texto): return ""
     texto = str(texto)
     texto = unidecode(texto) 
@@ -71,7 +88,6 @@ def limpar_visual_padrao(texto):
     return texto.strip()
 
 def limpar_para_fuzzy(texto):
-    """Limpeza agressiva apenas para o cálculo matemático."""
     return limpar_visual_padrao(texto).lower()
 
 def contar_palavras(texto):
@@ -79,25 +95,17 @@ def contar_palavras(texto):
     return len(texto.split())
 
 def verificar_seguranca_match(nome_origem, nome_alvo, id_origem, id_alvo):
-    """Regra 'Maria Clara' e ID Soberano."""
-    if id_origem and id_alvo and id_origem == id_alvo:
-        return True
-    if id_origem and id_alvo and id_origem != id_alvo:
-        return False
+    if id_origem and id_alvo and id_origem == id_alvo: return True
+    if id_origem and id_alvo and id_origem != id_alvo: return False
     
     palavras_origem = contar_palavras(nome_origem)
     palavras_alvo = contar_palavras(nome_alvo)
     
-    if palavras_origem <= 2 and palavras_alvo > palavras_origem:
-        return False
-        
+    if palavras_origem <= 2 and palavras_alvo > palavras_origem: return False
     return True
-
-# --- 2. MOTORES DE PROCESSAMENTO ---
 
 @st.cache_data
 def processar_coluna_unica(df, col_alvo, corte):
-    """MODO 1: Agrupamento interno (Deduplicação)"""
     valores_unicos = df[col_alvo].value_counts().index.tolist()
     mapa_resultado = {}
     ids_registrados = {}     
@@ -143,12 +151,22 @@ def processar_coluna_unica(df, col_alvo, corte):
     progresso.empty()
     df_out = df.copy()
     col_nova = f"{col_alvo}_Padronizado"
+    col_status = "Status_Auditoria"
+    
+    # Aplica o Mapeamento
     df_out[col_nova] = df_out[col_alvo].map(mapa_resultado)
-    return df_out, col_nova
+    
+    # --- NOVA LÓGICA DE AUDITORIA ---
+    # Compara a string original com a nova. Se diferir, marca como ALTERADO.
+    df_out[col_status] = df_out.apply(
+        lambda row: 'ALTERADO' if str(row[col_alvo]) != str(row[col_nova]) else 'ORIGINAL',
+        axis=1
+    )
+    
+    return df_out, col_nova, col_status
 
 @st.cache_data
 def processar_duas_colunas(df, col_suja, col_ref, corte):
-    """MODO 2: Comparação com Referência (De-Para)"""
     ref_unicos = df[col_ref].dropna().unique().tolist()
     banco_ref = []
     mapa_ref_id = {}
@@ -199,110 +217,139 @@ def processar_duas_colunas(df, col_suja, col_ref, corte):
     progresso.empty()
     df_out = df.copy()
     col_nova = "DePara_Resultado"
+    col_status = "Status_Auditoria"
+
     df_out[col_nova] = df_out[col_suja].map(mapa_resultado)
-    return df_out, col_nova
+    
+    # --- NOVA LÓGICA DE AUDITORIA ---
+    df_out[col_status] = df_out.apply(
+        lambda row: 'ALTERADO' if str(row[col_suja]) != str(row[col_nova]) else 'ORIGINAL',
+        axis=1
+    )
+    
+    return df_out, col_nova, col_status
 
-# --- 3. INTERFACE (STREAMLIT) ---
+# --- 3. INTERFACE (FRONTEND) ---
 
-st.title("🛡️Padronizador/De-Para - Ohana")
-st.markdown("---")
+st.markdown("""
+<h1>
+    <span class="material-symbols-outlined">dataset_linked</span> 
+    Padronização/De-Para - Ohana
+</h1>
+<p style='color: #67bed9; font-size: 1.1em;'>Ferramenta de Padronização e Enriquecimento de Dados</p>
+<hr style='border: 1px solid #333;'>
+""", unsafe_allow_html=True)
 
-# Sidebar com opções
+# Sidebar
 with st.sidebar:
-    st.header("Configurações da Operação")
+    st.markdown("<h3><span class='material-symbols-outlined'>settings</span> Configuração</h3>", unsafe_allow_html=True)
+    
     modo = st.radio(
         "Modo de Operação:",
-        ("Modo 1: Padronizar uma Coluna (Deduplicação)", 
-         "Modo 2: Comparar com Referência (De-Para)"),
+        ("Padronizar (1 Coluna)", 
+         "De-Para (2 Colunas)"),
         index=0
     )
     
-    st.markdown("---")
-    corte = st.slider("Sensibilidade da IA (%)", 50, 100, 70, help="Quanto maior, mais rigoroso o agrupamento.")
-    st.info("""
-    **Regras de Negócio Ativas:**
-    1. **Limpeza:** Remove acentos e caracteres especiais.
-    2. **ID Soberano:** IDs iguais forçam o agrupamento.
-    3. **Trava de Segurança:** Nomes curtos não são agrupados com nomes longos sem ID.
-    """)
+    st.markdown("<br>", unsafe_allow_html=True)
+    corte = st.slider("Sensibilidade da IA (%)", 50, 100, 70)
+    
+    st.info("Regras Ativas: Limpeza de sufixo, ID Soberano, Trava Anti-Homônimo.")
 
-arquivo = st.file_uploader("📂 Arraste sua planilha aqui (Excel/CSV)", type=["xlsx", "xls", "csv"])
+# Upload
+uploaded_file = st.file_uploader("Arraste sua planilha aqui", type=["xlsx", "xls", "csv"])
 
-if arquivo:
+if uploaded_file:
     try:
-        if arquivo.name.endswith('.csv'):
-            df = pd.read_csv(arquivo)
+        df = None
+        
+        # Leitura Inteligente com Suporte a Abas
+        if uploaded_file.name.endswith(('.xlsx', '.xls')):
+            excel_file = pd.ExcelFile(uploaded_file)
+            sheet_names = excel_file.sheet_names
+            
+            if len(sheet_names) > 1:
+                st.markdown("<h3><span class='material-symbols-outlined'>tab</span> Seleção de Aba</h3>", unsafe_allow_html=True)
+                selected_sheet = st.selectbox("Este arquivo possui múltiplas abas. Qual deseja utilizar?", sheet_names)
+                df = pd.read_excel(uploaded_file, sheet_name=selected_sheet)
+                st.markdown(f"<p style='color:#ea5382; font-size:0.9em;'>Trabalhando na aba: <b>{selected_sheet}</b></p>", unsafe_allow_html=True)
+                st.markdown("<hr style='border: 1px dashed #333;'>", unsafe_allow_html=True)
+            else:
+                df = pd.read_excel(uploaded_file)
         else:
-            df = pd.read_excel(arquivo)
-        
-        st.write("### Seleção de Dados")
-        col1, col2 = st.columns(2)
-        
-        if "Modo 1" in modo:
-            col_alvo = col1.selectbox("Selecione a Coluna para Padronizar:", df.columns)
-            botao_texto = "Executar Padronização (Modo 1)"
+            df = pd.read_csv(uploaded_file)
+
+        if df is not None:
+            st.markdown("<h3><span class='material-symbols-outlined'>table_chart</span> Seleção de Colunas</h3>", unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+            
+            if "1 Coluna" in modo:
+                col_alvo = col1.selectbox("Selecione a Coluna para Padronizar:", df.columns)
+                texto_botao = "Iniciar Padronização"
+            else:
+                col_suja = col1.selectbox("Coluna Entrada (Suja):", df.columns, index=0)
+                index_ref = 1 if len(df.columns) > 1 else 0
+                col_ref = col2.selectbox("Coluna Referência (Oficial):", df.columns, index=index_ref)
+                texto_botao = "Iniciar De-Para"
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            if st.button(texto_botao, type="primary", use_container_width=True):
+                with st.spinner("Processando..."):
                     
-        else: # Modo 2
-            col_suja = col1.selectbox("Coluna 'Suja' (Entrada):", df.columns, index=0)
-            col_ref = col2.selectbox("Coluna 'Referência' (Oficial):", df.columns, index=1 if len(df.columns)>1 else 0)
-            botao_texto = "Executar De-Para (Modo 2)"
+                    if "1 Coluna" in modo:
+                        # Agora retorna 3 valores: df, nome da coluna nova e nome da coluna de status
+                        df_res, col_nova, col_status = processar_coluna_unica(df, col_alvo, corte)
+                        col_analise = col_alvo
+                    else:
+                        df_res, col_nova, col_status = processar_duas_colunas(df, col_suja, col_ref, corte)
+                        col_analise = col_suja
 
-        st.markdown("<br>", unsafe_allow_html=True) # Espaço extra
-
-        if st.button(botao_texto, type="primary", use_container_width=True):
-            with st.spinner("Processando dados e aplicando regras de negócio..."):
-                
-                if "Modo 1" in modo:
-                    df_res, col_nova = processar_coluna_unica(df, col_alvo, corte)
-                    col_analise = col_alvo
-                else:
-                    df_res, col_nova = processar_duas_colunas(df, col_suja, col_ref, corte)
-                    col_analise = col_suja
-
-                # --- RESULTADOS ---
-                st.success("Processamento Finalizado com Sucesso!")
-                
-                mask_mudou = df_res[col_analise] != df_res[col_nova]
-                df_mudou = df_res[mask_mudou][[col_analise, col_nova]].drop_duplicates()
-                
-                qtd_total = len(df)
-                qtd_mudou = len(df_res[mask_mudou])
-                taxa = (qtd_mudou / qtd_total) * 100 if qtd_total > 0 else 0
-                
-                # Métricas estilizadas pelo CSS
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Linhas Totais", qtd_total)
-                m2.metric("Linhas Alteradas", qtd_mudou)
-                m3.metric("Taxa de Atuação", f"{taxa:.1f}%")
-                
-                st.subheader("🔎 Verificação das Alterações Realizadas")
-                if not df_mudou.empty:
-                    st.dataframe(df_mudou, use_container_width=True, height=400)
-                else:
-                    st.warning("Nenhuma alteração significativa foi necessária. Os dados foram apenas limpos.")
-                
-                # Download
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_res.to_excel(writer, index=False)
-                data = output.getvalue()
-                
-                st.download_button(
-                    label="📥 Baixar Planilha Pronta (Excel)",
-                    data=data,
-                    file_name="resultado_padronizado.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary",
-                    use_container_width=True
-                )
+                    # --- Resultados ---
+                    st.markdown("<h3><span class='material-symbols-outlined'>check_circle</span> Resultados</h3>", unsafe_allow_html=True)
+                    
+                    # Filtra apenas o que é "ALTERADO" para contar a taxa
+                    qtd_total = len(df)
+                    qtd_mudou = len(df_res[df_res[col_status] == 'ALTERADO'])
+                    taxa = (qtd_mudou / qtd_total) * 100 if qtd_total > 0 else 0
+                    
+                    m1, m2, m3 = st.columns(3)
+                    m1.markdown(f"**Linhas Totais**<br><span style='font-size: 2em; color:#ea5382'>{qtd_total}</span>", unsafe_allow_html=True)
+                    m2.markdown(f"**Alteradas**<br><span style='font-size: 2em; color:#ea5382'>{qtd_mudou}</span>", unsafe_allow_html=True)
+                    m3.markdown(f"**Taxa**<br><span style='font-size: 2em; color:#ea5382'>{taxa:.1f}%</span>", unsafe_allow_html=True)
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # Mostra a tabela apenas com as colunas relevantes para o usuário entender o que aconteceu
+                    # Mostramos: Coluna Original | Coluna Nova | Status
+                    if qtd_mudou > 0:
+                        df_visual = df_res[df_res[col_status] == 'ALTERADO'][[col_analise, col_nova, col_status]].head(100)
+                        st.dataframe(df_visual, use_container_width=True, height=400)
+                    else:
+                        st.warning("Nenhuma alteração foi realizada. Todos os dados já estavam no padrão ou não houve match seguro.")
+                    
+                    # Download
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df_res.to_excel(writer, index=False)
+                    data = output.getvalue()
+                    
+                    st.download_button(
+                        label="Baixar Resultado (Excel)",
+                        data=data,
+                        file_name="resultado_padronizado_auditado.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
 
     except Exception as e:
-        st.error(f"Erro ao processar arquivo: {e}")
-elif not arquivo:
-    # Tela inicial de boas-vindas quando não há arquivo
+        st.error(f"Erro ao processar: {e}")
+
+elif not uploaded_file:
     st.markdown("""
-    <div style='text-align: center; padding: 50px; opacity: 0.7;'>
-        <h2>Aguardando Arquivo...</h2>
-        <p>Faça o upload de uma planilha acima para começar o tratamento de dados.</p>
+    <div style='text-align: center; padding: 50px; opacity: 0.6;'>
+        <span class="material-symbols-outlined" style="font-size: 4em; color: #67bed9;">cloud_upload</span>
+        <h3 style="color: #67bed9;">Aguardando Arquivo</h3>
+        <p>Faça o upload da sua planilha acima para começar.</p>
     </div>
     """, unsafe_allow_html=True)
